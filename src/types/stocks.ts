@@ -2,6 +2,9 @@ export interface Quote {
   symbol: string
   name: string
   price: number
+  sessionOpen: number | null
+  sessionPrice: number | null
+  history: QuoteHistoryPoint[]
   change: number
   changePercent: number
   change3Day: number | null
@@ -9,6 +12,11 @@ export interface Quote {
   change7Day: number | null
   change7DayPercent: number | null
   volume: number
+}
+
+export interface QuoteHistoryPoint {
+  timestamp: string
+  price: number
 }
 
 export interface QuotesResponse {

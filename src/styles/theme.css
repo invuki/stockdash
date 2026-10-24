@@ -104,13 +104,25 @@ button, input, select { font: inherit; }
 .performer-card { border-color: var(--bs-border-color); background: var(--dashboard-surface-raised); animation: performer-arrive 560ms var(--ease-out-expo) both; }
 .top-performers > .row > :nth-child(2) .performer-card { animation-delay: 85ms; }
 .top-performers > .row > :nth-child(3) .performer-card { animation-delay: 170ms; }
-.performer-card .card-body { display: flex; min-height: 11rem; flex-direction: column; justify-content: space-between; padding: 1.25rem; }
+.performer-card .card-body { display: flex; min-height: 15rem; flex-direction: column; justify-content: space-between; padding: 1.25rem; }
 .performer-heading { display: flex; align-items: flex-start; gap: .8rem; }
 .performer-skeleton-copy { display: grid; min-width: 10rem; gap: .35rem; padding-top: .15rem; }
 .performer-skeleton-copy .placeholder { height: .8rem; }
 .performer-rank { display: grid; width: 2.4rem; height: 2.4rem; flex: 0 0 2.4rem; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--dashboard-accent) 18%, transparent); color: var(--dashboard-accent); font: 700 .9rem var(--dashboard-numeric); }
 .performer-symbol { margin: 0; font: 750 1.15rem var(--dashboard-numeric); letter-spacing: -.035em; }
 .performer-company { margin: .2rem 0 0; color: var(--bs-secondary-color); font-size: .78rem; }
+.performer-chart { margin: .9rem 0 0; }
+.performer-chart-caption { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .3rem; color: var(--bs-secondary-color); font: 600 .65rem var(--dashboard-numeric); font-variant-numeric: tabular-nums; }
+.performer-chart svg { display: block; width: 100%; height: 3.6rem; overflow: visible; }
+.performer-chart-baseline { fill: none; stroke: var(--bs-border-color); stroke-width: 1; }
+.performer-chart-line { fill: none; stroke: var(--dashboard-gain); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.performer-chart.loss .performer-chart-line { stroke: var(--dashboard-loss); }
+.performer-chart-endpoint { fill: var(--dashboard-gain); }
+.performer-chart.loss .performer-chart-endpoint { fill: var(--dashboard-loss); }
+.performer-chart-skeleton { display: block; width: 100%; height: 3.6rem; }
+.performer-session-prices { display: flex; justify-content: space-between; gap: .5rem; margin-top: 1.1rem; color: var(--bs-secondary-color); font: .68rem var(--dashboard-numeric); font-variant-numeric: tabular-nums; }
+.performer-session-prices span { display: flex; flex-direction: column; gap: .25rem; }
+.performer-session-prices strong { color: var(--bs-body-color); font-size: .82rem; font-weight: 650; }
 .performer-metrics { display: flex; align-items: end; justify-content: space-between; gap: .5rem; margin-top: 1.4rem; font-variant-numeric: tabular-nums; }
 .performer-metric-label { color: var(--bs-secondary-color); font-size: .75rem; font-weight: 600; }
 .performer-value { font: 700 1.35rem var(--dashboard-numeric); letter-spacing: -.04em; }

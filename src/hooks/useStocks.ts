@@ -17,6 +17,20 @@ function isQuote(value: unknown): value is Quote {
     && typeof quote.name === 'string'
     && typeof quote.price === 'number'
     && Number.isFinite(quote.price)
+    && (quote.sessionOpen === null
+      || (typeof quote.sessionOpen === 'number' && Number.isFinite(quote.sessionOpen)))
+    && (quote.sessionPrice === null
+      || (typeof quote.sessionPrice === 'number' && Number.isFinite(quote.sessionPrice)))
+    && Array.isArray(quote.history)
+    && quote.history.every((point) => (
+      typeof point === 'object'
+      && point !== null
+      && typeof point.timestamp === 'string'
+      && Number.isFinite(Date.parse(point.timestamp))
+      && typeof point.price === 'number'
+      && Number.isFinite(point.price)
+      && point.price > 0
+    ))
     && typeof quote.change === 'number'
     && Number.isFinite(quote.change)
     && typeof quote.changePercent === 'number'

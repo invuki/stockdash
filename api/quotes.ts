@@ -17,6 +17,7 @@ export interface AlpacaTrade {
 }
 
 export interface AlpacaBar {
+  o: number
   c: number
   v: number
   t: string
@@ -56,7 +57,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isAlpacaBar(value: unknown): value is AlpacaBar {
   if (!isObject(value)) return false
-  return typeof value.c === 'number'
+  return typeof value.o === 'number'
+    && Number.isFinite(value.o)
+    && typeof value.c === 'number'
     && Number.isFinite(value.c)
     && typeof value.v === 'number'
     && Number.isFinite(value.v)
@@ -139,10 +142,18 @@ function quoteFromSnapshot(
   const change = Number((price - previousClose).toFixed(2))
   const threeDay = historicalChange(price, bars, sessionIndex, 3)
   const sevenDay = historicalChange(price, bars, sessionIndex, 7)
+  const history = [
+    ...bars.slice(Math.max(0, sessionIndex - 7), sessionIndex)
+      .map((bar) => ({ timestamp: bar.t, price: bar.c })),
+    { timestamp: latestTradeAt, price },
+  ]
   return {
     symbol,
     name,
     price,
+    sessionOpen: snapshot.dailyBar?.o ?? null,
+    sessionPrice: snapshot.dailyBar?.c ?? null,
+    history,
     change,
     changePercent: Number((change / previousClose * 100).toFixed(2)),
     change3Day: threeDay.change,
@@ -205,7 +216,7 @@ async function createAlpacaResponse(
   const barsUrl = new URL('https://data.alpaca.markets/v2/stocks/bars')
   barsUrl.searchParams.set('symbols', SP100.map(({ symbol }) => symbol).join(','))
   barsUrl.searchParams.set('timeframe', '1Day')
-  barsUrl.searchParams.set('start', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString())
+  barsUrl.searchParams.set('start', new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString())
   barsUrl.searchParams.set('limit', '10000')
   barsUrl.searchParams.set('sort', 'asc')
   barsUrl.searchParams.set('feed', 'iex')
