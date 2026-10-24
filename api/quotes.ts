@@ -131,15 +131,16 @@ function quoteFromSnapshot(
 ): Quote | null {
   const price = snapshot.latestTrade?.p
   const latestTradeAt = snapshot.latestTrade?.t
-  if (price === undefined || latestTradeAt === undefined) return null
+  const sessionBar = snapshot.dailyBar
+  if (price === undefined || latestTradeAt === undefined || !sessionBar
+    || sessionBar.o <= 0 || sessionBar.c <= 0
+    || tradingDate(sessionBar.t) !== tradingDate(latestTradeAt)) return null
 
   const bars = [...dailyBars].sort((left, right) => Date.parse(left.t) - Date.parse(right.t))
   const sessionDate = tradingDate(latestTradeAt)
   const sessionIndex = bars.findLastIndex((bar) => tradingDate(bar.t) === sessionDate)
-  const previousClose = bars[sessionIndex - 1]?.c
-  if (sessionIndex < 1 || previousClose === undefined || previousClose <= 0) return null
 
-  const change = Number((price - previousClose).toFixed(2))
+  const change = Number((sessionBar.c - sessionBar.o).toFixed(2))
   const threeDay = historicalChange(price, bars, sessionIndex, 3)
   const sevenDay = historicalChange(price, bars, sessionIndex, 7)
   const history = [
@@ -155,7 +156,7 @@ function quoteFromSnapshot(
     sessionPrice: snapshot.dailyBar?.c ?? null,
     history,
     change,
-    changePercent: Number((change / previousClose * 100).toFixed(2)),
+    changePercent: Number((change / sessionBar.o * 100).toFixed(2)),
     change3Day: threeDay.change,
     change3DayPercent: threeDay.changePercent,
     change7Day: sevenDay.change,
