@@ -9,11 +9,11 @@ A React and TypeScript dashboard that turns stock quote API responses into an in
 - Provides a `/api/quotes` endpoint that requests stock snapshots and daily bars from Alpaca's IEX feed.
 - Keeps Alpaca credentials on the server rather than exposing them to browser code.
 - Validates upstream payloads and reports API, network, and invalid-response errors.
-- Uses a short server-side cache and returns deterministic mock quotes when Alpaca credentials are not configured.
+- Uses a short server-side cache and returns a configuration error rather than presenting invented prices when Alpaca credentials are missing.
 
 ### Data display
 
-- Presents advancing stocks, the top gainer, and the average daily change in a market summary.
+- Presents all 100 S&P 100 constituents, alongside advancing stocks, the top gainer, and the average daily change in a market summary.
 - Highlights the top three performers and updates the ranking when the selected change metric changes.
 - Lets users search by ticker or company and sort by one-, three-, or seven-day change in dollars or percent, as well as price, company, and volume.
 - Adapts the stock list between a desktop table and mobile cards, with dark and light themes.
@@ -34,7 +34,7 @@ npm install
 npm run dev
 ```
 
-Without Alpaca credentials, the local API serves mock data. To use Alpaca, copy `.env.example` to `.env.local` and set `ALPACA_API_KEY` and `ALPACA_API_SECRET`. Keep `.env.local` private; it is ignored by Git.
+To load live prices, copy `.env.example` to `.env.local` and set `ALPACA_API_KEY` and `ALPACA_API_SECRET`. Without both credentials, the API reports that live quote data is unavailable instead of returning fabricated prices. Keep `.env.local` private; it is ignored by Git.
 
 ## Scripts
 

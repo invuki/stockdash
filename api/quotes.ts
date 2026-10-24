@@ -13,11 +13,13 @@ interface ApiResponse {
 
 export interface AlpacaTrade {
   p: number
+  t: string
 }
 
 export interface AlpacaBar {
   c: number
   v: number
+  t: string
 }
 
 interface AlpacaHistoryBar {
@@ -47,30 +49,6 @@ interface AlpacaEnvironment {
 let cachedResponse: QuotesResponse | null = null
 let cacheExpiresAt = 0
 
-function hashSymbol(symbol: string, salt = 0): number {
-  return [...symbol].reduce((hash, character) => (
-    (hash * 31 + character.charCodeAt(0) + salt) % 1_000_003
-  ), 17)
-}
-
-function createMockQuote(symbol: string, name: string): Quote {
-  const seed = hashSymbol(symbol)
-  const price = Number((25 + (seed % 75_000) / 100).toFixed(2))
-  const changePercent = Number((((hashSymbol(symbol, 13) % 8_001) / 1_000) - 4).toFixed(2))
-  return {
-    symbol,
-    name,
-    price,
-    change: Number((price * changePercent / 100).toFixed(2)),
-    changePercent,
-    change3Day: Number((price * (((hashSymbol(symbol, 37) % 12_001) / 1_000) - 6) / 100).toFixed(2)),
-    change3DayPercent: Number((((hashSymbol(symbol, 37) % 12_001) / 1_000) - 6).toFixed(2)),
-    change7Day: Number((price * (((hashSymbol(symbol, 43) % 20_001) / 1_000) - 10) / 100).toFixed(2)),
-    change7DayPercent: Number((((hashSymbol(symbol, 43) % 20_001) / 1_000) - 10).toFixed(2)),
-    volume: 100_000 + hashSymbol(symbol, 29) * 17,
-  }
-}
-
 function isObject(value: unknown): value is Record<string, unknown> {
   // This type guard narrows unknown JSON to a property-readable object.
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -82,6 +60,8 @@ function isAlpacaBar(value: unknown): value is AlpacaBar {
     && Number.isFinite(value.c)
     && typeof value.v === 'number'
     && Number.isFinite(value.v)
+    && typeof value.t === 'string'
+    && Number.isFinite(Date.parse(value.t))
 }
 
 function isAlpacaSnapshot(value: unknown): value is AlpacaSnapshot {
@@ -90,7 +70,9 @@ function isAlpacaSnapshot(value: unknown): value is AlpacaSnapshot {
   return (latestTrade === undefined
       || (isObject(latestTrade)
         && typeof latestTrade.p === 'number'
-        && Number.isFinite(latestTrade.p)))
+        && Number.isFinite(latestTrade.p)
+        && typeof latestTrade.t === 'string'
+        && Number.isFinite(Date.parse(latestTrade.t))))
     && (prevDailyBar === undefined || isAlpacaBar(prevDailyBar))
     && (dailyBar === undefined || isAlpacaBar(dailyBar))
 }
@@ -106,15 +88,30 @@ function isAlpacaBarsResponse(value: unknown): value is AlpacaBarsResponse {
     && bars.every((bar) => isObject(bar)
       && typeof bar.c === 'number'
       && Number.isFinite(bar.c)
-      && typeof bar.t === 'string'))
+      && typeof bar.t === 'string'
+      && Number.isFinite(Date.parse(bar.t))))
+}
+
+const NEW_YORK_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+function tradingDate(timestamp: string): string {
+  const parts = NEW_YORK_DATE_FORMATTER.formatToParts(new Date(timestamp))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
 }
 
 function historicalChange(
   price: number,
   bars: AlpacaHistoryBar[],
+  sessionIndex: number,
   tradingDays: number,
 ): { change: number | null; changePercent: number | null } {
-  const referenceBar = bars[bars.length - tradingDays - 1]
+  const referenceBar = bars[sessionIndex - tradingDays]
   if (!referenceBar || referenceBar.c <= 0) return { change: null, changePercent: null }
   const change = Number((price - referenceBar.c).toFixed(2))
   return {
@@ -127,21 +124,31 @@ function quoteFromSnapshot(
   symbol: string,
   name: string,
   snapshot: AlpacaSnapshot,
+  dailyBars: AlpacaHistoryBar[],
 ): Quote | null {
   const price = snapshot.latestTrade?.p
-  const previousClose = snapshot.prevDailyBar?.c
-  if (price === undefined || previousClose === undefined || previousClose <= 0) return null
+  const latestTradeAt = snapshot.latestTrade?.t
+  if (price === undefined || latestTradeAt === undefined) return null
+
+  const bars = [...dailyBars].sort((left, right) => Date.parse(left.t) - Date.parse(right.t))
+  const sessionDate = tradingDate(latestTradeAt)
+  const sessionIndex = bars.findLastIndex((bar) => tradingDate(bar.t) === sessionDate)
+  const previousClose = bars[sessionIndex - 1]?.c
+  if (sessionIndex < 1 || previousClose === undefined || previousClose <= 0) return null
+
   const change = Number((price - previousClose).toFixed(2))
+  const threeDay = historicalChange(price, bars, sessionIndex, 3)
+  const sevenDay = historicalChange(price, bars, sessionIndex, 7)
   return {
     symbol,
     name,
     price,
     change,
     changePercent: Number((change / previousClose * 100).toFixed(2)),
-    change3Day: null,
-    change3DayPercent: null,
-    change7Day: null,
-    change7DayPercent: null,
+    change3Day: threeDay.change,
+    change3DayPercent: threeDay.changePercent,
+    change7Day: sevenDay.change,
+    change7DayPercent: sevenDay.changePercent,
     volume: snapshot.dailyBar?.v ?? 0,
   }
 }
@@ -149,22 +156,15 @@ function quoteFromSnapshot(
 export function mapSnapshotsToQuotes(
   companies: Sp100Company[],
   snapshots: AlpacaSnapshotsResponse,
+  dailyBarsBySymbol: Record<string, AlpacaHistoryBar[]>,
 ): Quote[] {
   return companies.flatMap(({ symbol, name }) => {
     const snapshot = snapshots[symbol]
     // Alpaca can omit symbols when it has no snapshot for that ticker.
     if (!snapshot) return []
-    const quote = quoteFromSnapshot(symbol, name, snapshot)
+    const quote = quoteFromSnapshot(symbol, name, snapshot, dailyBarsBySymbol[symbol] ?? [])
     return quote ? [quote] : []
   })
-}
-
-function createMockResponse(): QuotesResponse {
-  const quotes = SP100
-    .map(({ symbol, name }) => createMockQuote(symbol, name))
-    .sort((left, right) => right.changePercent - left.changePercent)
-    .slice(0, 50)
-  return { updatedAt: new Date().toISOString(), quotes }
 }
 
 async function createAlpacaResponse(
@@ -209,6 +209,7 @@ async function createAlpacaResponse(
   barsUrl.searchParams.set('limit', '10000')
   barsUrl.searchParams.set('sort', 'asc')
   barsUrl.searchParams.set('feed', 'iex')
+  barsUrl.searchParams.set('adjustment', 'split')
 
   let barsResponse: Response
   try {
@@ -236,21 +237,8 @@ async function createAlpacaResponse(
     throw new Error('Alpaca returned historical bars with an invalid shape.')
   }
 
-  const quotes = mapSnapshotsToQuotes(SP100, snapshotData)
-    .map((quote) => {
-      const bars = barsData.bars[quote.symbol] ?? []
-      const threeDay = historicalChange(quote.price, bars, 3)
-      const sevenDay = historicalChange(quote.price, bars, 7)
-      return {
-        ...quote,
-        change3Day: threeDay.change,
-        change3DayPercent: threeDay.changePercent,
-        change7Day: sevenDay.change,
-        change7DayPercent: sevenDay.changePercent,
-      }
-    })
+  const quotes = mapSnapshotsToQuotes(SP100, snapshotData, barsData.bars)
     .sort((left, right) => right.changePercent - left.changePercent)
-    .slice(0, 50)
   return { updatedAt: new Date().toISOString(), quotes }
 }
 
@@ -273,9 +261,9 @@ export default function handler(
 
   const { ALPACA_API_KEY: apiKey, ALPACA_API_SECRET: apiSecret } = environment
   if (!apiKey && !apiSecret) {
-    cachedResponse = createMockResponse()
-    cacheExpiresAt = Date.now() + 20_000
-    response.status(200).json(cachedResponse)
+    response.status(503).json({
+      error: 'Live quote data is unavailable. Configure both Alpaca API credentials on the server.',
+    })
     return Promise.resolve()
   }
   if (!apiKey || !apiSecret) {
